@@ -25,10 +25,7 @@ jobs:
 
       - name: Build EXE (onefile, windowed, with data)
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name joco ^
-            --collect-submodules pandas ^
-            --add-data "CPS团链产业777.xls;." ^
-            main.py
+          pyinstaller --noconfirm --onefile --windowed --name joco --collect-submodules pandas --add-data "CPS团链产业777.xls;." main.py
 
       - name: Upload artifact (all dist outputs)
         uses: actions/upload-artifact@v4
