@@ -19,7 +19,7 @@ class ExcelProcessorApp(tk.Tk):
         self.preview_df = None
 
         # UI
-        self._build_ui()
+        self._build_ui()  # <--- 自动添加，保证所有控件都显示！
 
     def _build_ui(self):
         # 顶部：文件选择 + 工作表选择
