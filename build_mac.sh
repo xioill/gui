@@ -8,7 +8,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 cd "$SCRIPT_DIR"
 
-APP_NAME="Excel处理小工具"
+APP_NAME="joco"
 
 if ! command -v pyinstaller >/dev/null 2>&1; then
   echo "未检测到 pyinstaller，正在安装..."

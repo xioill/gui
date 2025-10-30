@@ -2,12 +2,14 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import os
 import pandas as pd
+import xlrd  # 保证已在requirements.txt
+import warnings
 
 
 class ExcelProcessorApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Excel 处理小工具")
+        self.title("joco")
         self.geometry("1000x640")
 
         # 数据状态
@@ -37,23 +39,43 @@ class ExcelProcessorApp(tk.Tk):
         middle_frame = ttk.Frame(self, padding=8)
         middle_frame.pack(fill=tk.X)
 
-        # 列选择（多选）
+        # 列选择（多选），带映射
+        self.template_headers = []   # 存储模板字段列表
+        self.col_mapping_vars = {}   # key:源列, value:tk.StringVar
+        self.mapping_widgets = {}    # 动态Combobox控件，便于后续清理
+
+        # 读取模板表头以供选项
+        try:
+            template_path = os.path.join(os.path.dirname(__file__), "CPS团链产业777.xls")
+            workbook = xlrd.open_workbook(template_path)
+            sheet = workbook.sheet_by_index(0)
+            self.template_headers = sheet.row_values(0)
+        except Exception:
+            self.template_headers = []
+
         left_box = ttk.Labelframe(middle_frame, text="选择要提取的列", padding=8)
         left_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        self.columns_listbox = tk.Listbox(left_box, selectmode=tk.MULTIPLE, exportselection=False)
-        self.columns_listbox.pack(fill=tk.BOTH, expand=True)
+        self.mapping_canvas = tk.Canvas(left_box)
+        self.mapping_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar = ttk.Scrollbar(left_box, orient="vertical", command=self.mapping_canvas.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.mapping_canvas.configure(yscrollcommand=scrollbar.set)
+        self.mapping_inner = ttk.Frame(self.mapping_canvas)
+        self.mapping_canvas.create_window((0, 0), window=self.mapping_inner, anchor='nw')
+        self.mapping_inner.bind("<Configure>", lambda e: self.mapping_canvas.configure(scrollregion=self.mapping_canvas.bbox("all")))
+        # 注意：self.columns_listbox 暂不再直接展示，推荐用 mapping_inner 实现UI
 
         # 操作区
         right_box = ttk.Labelframe(middle_frame, text="列增量设置", padding=8)
         right_box.pack(side=tk.LEFT, fill=tk.Y, padx=(8, 0))
 
-        ttk.Label(right_box, text="选择要+0.01的列").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(right_box, text="选择要+0.001的列").grid(row=0, column=0, sticky=tk.W)
         self.increment_col_combo = ttk.Combobox(right_box, state="disabled", width=24)
         self.increment_col_combo.grid(row=1, column=0, sticky=tk.W)
 
-        ttk.Label(right_box, text="增量(默认0.01)").grid(row=2, column=0, sticky=tk.W, pady=(8, 0))
-        self.increment_value_var = tk.StringVar(value="0.01")
+        ttk.Label(right_box, text="增量(默认0.001)").grid(row=2, column=0, sticky=tk.W, pady=(8, 0))
+        self.increment_value_var = tk.StringVar(value="0.001")
         self.increment_entry = ttk.Entry(right_box, textvariable=self.increment_value_var, width=12)
         self.increment_entry.grid(row=3, column=0, sticky=tk.W)
 
@@ -120,10 +142,32 @@ class ExcelProcessorApp(tk.Tk):
 
     def _refresh_columns(self, df: pd.DataFrame):
         cols = list(map(str, df.columns))
+        # 清理UI
+        for widget in self.mapping_inner.winfo_children():
+            widget.destroy()
+        self.col_mapping_vars = {}  # 重建变量
+        self.mapping_widgets = {}
+        self.col_checkbox_vars = {}
 
-        self.columns_listbox.delete(0, tk.END)
-        for c in cols:
-            self.columns_listbox.insert(tk.END, c)
+        # 每列渲染一行
+        for i, c in enumerate(cols):
+            var = tk.BooleanVar(value=False)
+            self.col_checkbox_vars[c] = var
+            chk = ttk.Checkbutton(self.mapping_inner, text=c, variable=var)
+            chk.grid(row=i, column=0, sticky=tk.W)
+
+            lbl = ttk.Label(self.mapping_inner, text="→", width=2)
+            lbl.grid(row=i, column=1)
+
+            cmb_var = tk.StringVar()
+            cmb = ttk.Combobox(self.mapping_inner, textvariable=cmb_var, state="readonly", width=28)
+            cmb["values"] = self.template_headers
+            if self.template_headers:
+                cmb_var.set("")  # 默认空
+            cmb.grid(row=i, column=2, sticky=tk.W)
+
+            self.col_mapping_vars[c] = cmb_var
+            self.mapping_widgets[c] = cmb
 
         self.increment_col_combo.configure(state="readonly", values=cols)
         if cols:
@@ -157,21 +201,28 @@ class ExcelProcessorApp(tk.Tk):
             messagebox.showwarning("提示", "请先选择并加载Excel文件")
             return
 
-        # 获取选择列
-        selected_indices = self.columns_listbox.curselection()
-        if not selected_indices:
+        # 获取勾选列和映射
+        selected_cols = [col for col, var in self.col_checkbox_vars.items() if var.get()]
+        if not selected_cols:
             messagebox.showwarning("提示", "请至少选择一列进行提取")
             return
 
-        selected_cols = [self.columns_listbox.get(i) for i in selected_indices]
-        df = self.current_df.copy()
-        try:
-            df = df[selected_cols]
-        except KeyError:
-            messagebox.showerror("错误", "选择列无效")
-            return
+        mapping = {}
+        used_targets = set()
+        for col in selected_cols:
+            target = self.col_mapping_vars.get(col).get().strip()
+            if target:
+                if target in used_targets:
+                    messagebox.showerror("错误", f"目标列{target}已被多次映射，请调整后再继续！")
+                    return
+                mapping[col] = target
+                used_targets.add(target)
+            else:
+                mapping[col] = None
 
-        # 读取目标列与增量
+        df = self.current_df[selected_cols].copy()
+
+        # 增量逻辑不变
         target_col = self.increment_col_combo.get()
         inc_str = self.increment_value_var.get().strip()
         try:
@@ -182,24 +233,22 @@ class ExcelProcessorApp(tk.Tk):
 
         if target_col:
             if target_col not in df.columns:
-                # 如果用户选择的增量列未在提取列中，则自动加入
                 if target_col in self.current_df.columns:
                     df[target_col] = self.current_df[target_col]
                 else:
                     messagebox.showerror("错误", f"未找到列: {target_col}")
                     return
-
-            # 仅对可数值的单元格加增量
             def add_inc(v):
                 try:
                     return float(v) + inc_value
                 except Exception:
                     return v
-
             df[target_col] = df[target_col].map(add_inc)
 
+        # 预览阶段先不调整顺序，仅显示数据
         self._set_preview(df.head(200))
         self.preview_df = df
+        self._active_col_mapping = mapping  # 供导出用
 
     def on_export(self):
         if self.preview_df is None or self.preview_df.empty:
@@ -213,10 +262,36 @@ class ExcelProcessorApp(tk.Tk):
         if not file_path:
             return
         try:
-            self.preview_df.to_excel(file_path, index=False)
-            messagebox.showinfo("成功", f"已导出到:\n{file_path}")
-        except Exception as e:
-            messagebox.showerror("导出失败", f"导出出错:\n{e}")
+            # 以 xls 模板获取表头
+            template_path = os.path.join(os.path.dirname(__file__), "CPS团链产业777.xls")
+            workbook = xlrd.open_workbook(template_path)
+            sheet = workbook.sheet_by_index(0)
+            template_headers = sheet.row_values(0)
+        except Exception:
+            template_headers = []
+
+        mapping = getattr(self, '_active_col_mapping', {})
+        data_df = self.preview_df.copy()
+
+        # 1. 生成映射后DataFrame，模板表头优先顺序
+        if mapping and template_headers:
+            result = pd.DataFrame(columns=template_headers)
+            unmapped_cols = []
+            for src_col, tgt_col in mapping.items():
+                if tgt_col and tgt_col in template_headers:
+                    # 填写到目标template字段
+                    result[tgt_col] = data_df[src_col]
+                else:
+                    unmapped_cols.append(src_col)
+            # 未在模板字段的源数据，原名放末尾
+            for c in unmapped_cols:
+                result[c] = data_df[c]
+            result.to_excel(file_path, index=False)
+        else:
+            # 回退原始导出
+            data_df.to_excel(file_path, index=False)
+
+        messagebox.showinfo("成功", f"已导出到:\n{file_path}")
 
 
 def main():

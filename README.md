@@ -1,9 +1,9 @@
-# Excel 识别与列增量小工具
+# joco 识别与列增量小工具
 
 一个基于 Tkinter + pandas 的桌面小应用：
 - 读取本地 Excel 文件
 - 选择需要的列生成新表
-- 指定某一列为每个单元格增加固定增量（默认 0.01，可改）
+- 指定某一列为每个单元格增加固定增量（默认 0.001，可改）
 - 预览结果并导出为新的 Excel
 
 ## 运行环境
@@ -25,13 +25,13 @@ python main.py
 方式一：直接命令
 ```bash
 pip install pyinstaller
-pyinstaller --noconfirm --windowed --name "Excel处理小工具" main.py
+pyinstaller --noconfirm --windowed --name "joco" main.py
 ```
 方式二：脚本
 ```bash
 zsh build_mac.sh
 ```
-生成的应用位于 `dist/Excel处理小工具.app`，可直接拷贝给其他 mac 使用。
+生成的应用位于 `dist/joco.app`，可直接拷贝给其他 mac 使用。
 
 首次启动可能被 Gatekeeper 拦截：右键该 `.app` → 选择“打开”即可放行。如果需要对外分发给大量用户，建议进行签名与公证（codesign + notarize）。
 
@@ -39,7 +39,7 @@ zsh build_mac.sh
 方式一：直接命令
 ```powershell
 pip install pyinstaller
-pyinstaller --noconfirm --windowed --name ExcelTool main.py
+pyinstaller --noconfirm --windowed --name joco main.py
 ```
 方式二：脚本
 ```bat
@@ -79,7 +79,7 @@ zsh setup_git.sh
    git add .
    
    # 提交
-   git commit -m "初始提交：Excel 处理小工具"
+   git commit -m "初始提交：joco"
    
    # 连接到 GitHub 仓库（替换成你的仓库地址）
    git remote add origin https://github.com/你的用户名/仓库名.git
@@ -102,8 +102,8 @@ zsh setup_git.sh
 4. 点击右侧 **"Run workflow"** 按钮 → 选择 `main` 分支 → 点击绿色的 **"Run workflow"**
 5. 等待几分钟（会显示构建进度）
 6. 构建完成后，在页面底部找到 **Artifacts** 区域
-7. 下载 **`ExcelTool-windows-exe`** 压缩包
-8. 解压后即可得到 `ExcelTool.exe`，可在任何 Windows 电脑上运行
+7. 下载 **`joco-windows-exe`** 压缩包
+8. 解压后即可得到 `joco.exe`，可在任何 Windows 电脑上运行
 
 ### 常见问题
 - 打包后体积较大属正常，因为包含了运行所需的 Python 运行时与依赖。
@@ -114,7 +114,7 @@ zsh setup_git.sh
 1. 点击“选择Excel文件”，选择要处理的文件。
 2. 在“工作表”下拉框中选择需要处理的 Sheet。
 3. 在左侧列表中多选需要提取的列。
-4. 在右侧选择要加增量的目标列，并设置增量（默认 0.01）。
+4. 在右侧选择要加增量的目标列，并设置增量（默认 0.001）。
 5. 点击“应用提取与增量”，在下方预览结果（最多显示前 200 行）。
 6. 点击“导出为Excel...”保存新表格。
 
